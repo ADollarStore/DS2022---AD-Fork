@@ -8,19 +8,27 @@ import boto3
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
 
-# Prefer the standard AWS names (also used by the AWS CLI / boto3 default chain):
+# Learner Lab AWS Details (session token required; expires ~4 hours):
 #   export AWS_ACCESS_KEY_ID="YOUR_KEY"
 #   export AWS_SECRET_ACCESS_KEY="YOUR_SECRET"
+#   export AWS_SESSION_TOKEN="YOUR_SESSION_TOKEN"
 ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID") or os.getenv("MY_ACCESS_KEY")
 SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY") or os.getenv("MY_SECRET_ACCESS_KEY")
+SESSION_TOKEN = os.getenv("AWS_SESSION_TOKEN")
 
 if not ACCESS_KEY or not SECRET_ACCESS_KEY:
-    log.error("Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (or MY_ACCESS_KEY / MY_SECRET_ACCESS_KEY).")
+    log.error(
+        "Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY "
+        "(and AWS_SESSION_TOKEN for Learner Lab)."
+    )
     raise SystemExit(1)
 
-s3 = boto3.client(
-    "s3",
-    aws_access_key_id=ACCESS_KEY,
-    aws_secret_access_key=SECRET_ACCESS_KEY,
-)
+kwargs = {
+    "aws_access_key_id": ACCESS_KEY,
+    "aws_secret_access_key": SECRET_ACCESS_KEY,
+}
+if SESSION_TOKEN:
+    kwargs["aws_session_token"] = SESSION_TOKEN
+
+s3 = boto3.client("s3", **kwargs)
 log.info("S3 client created using environment credentials.")

@@ -9,8 +9,8 @@ from botocore.exceptions import ClientError
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
 
-# we use buckets named class-<USER> to avoid conflicts with other students
-bucket_name = "class-" + os.environ.get("USER", "unknown")
+# practice-<USER>: globally unique bucket name (not the same as the IAM user)
+bucket_name = f"practice-{os.environ.get('USER', 'unknown')}"
 local_file = "cloud.jpg"  # must exist in the current directory
 key = "folder/in/bucket/cloud.jpg"
 

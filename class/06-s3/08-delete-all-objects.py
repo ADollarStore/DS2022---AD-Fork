@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Delete all objects in a bucket (recursive empty). Run before 09-delete-bucket.py."""
+"""Optional: delete all objects (recursive empty). Run before 09-delete-bucket.py."""
 import logging
 import os
 
@@ -9,8 +9,8 @@ from botocore.exceptions import ClientError
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
 
-# we use buckets named class-<USER> to avoid conflicts with other students
-bucket_name = "class-" + os.environ.get("USER", "unknown")
+# practice-<USER>: globally unique bucket name (not the same as the IAM user)
+bucket_name = f"practice-{os.environ.get('USER', 'unknown')}"
 
 try:
     s3 = boto3.client("s3")

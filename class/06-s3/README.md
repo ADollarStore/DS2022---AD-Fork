@@ -1,8 +1,8 @@
 # AWS S3 Storage
 
-This session focuses on **S3**—object storage for datasets, backups, and pipeline I/O. You already covered [IAM](../06-iam/README.md); now you use IAM credentials to create buckets, move objects, and call S3 from the CLI and `boto3`.
+This session focuses on **S3**, object storage for datasets, backups, and pipeline I/O. You already covered [IAM](../06-iam/README.md); now you practice IAM in the AWS Academy **Learner Lab**, then use temporary lab credentials with the CLI and `boto3` to create buckets and move objects.
 
-**You will:** configure the AWS CLI, practice `cp` / `sync` / `presign` / `rm`, and run the numbered Python scripts in this folder. That workflow is what `Lab 6` builds on—and the same pattern of identity + storage you will reuse when attaching data and roles to **Amazon EC2 virtual machines** and **Amazon Lambda serverless** workloads in the coming weeks.
+**You will:** start a Learner Lab, create an IAM group and user, configure the AWS CLI from **AWS Details**, practice `cp` / `sync` / `presign`, and run the numbered Python scripts in this folder. That workflow is what `Lab 6` builds on, and the same pattern of identity + storage you will reuse with **Amazon EC2** and **Amazon Lambda** in the coming weeks.
 
 > Experiment with the commands and options. Errors are normal; ask for help and help each other when you can. Advanced topics (versioning, events, ACLs) are optional.
 
@@ -12,7 +12,7 @@ This session focuses on **S3**—object storage for datasets, backups, and pipel
 
 ### Environment
 
-The following exercises require a working Python 3 environment, the AWS CLI, and `boto3`. You will install the tools next, then configure access keys in the following section.
+The following exercises require a working Python 3 environment, the AWS CLI, and `boto3`. You will install the tools next, then start the Learner Lab and configure credentials.
 
 1. Create a new folder and set up a new Python environment:
   ```bash
@@ -41,64 +41,97 @@ The following exercises require a working Python 3 environment, the AWS CLI, and
   If the shell reports `aws: command not found`, run `uv tool update-shell`, then open a new terminal so the `uv` tool directory is on your `PATH`.
 
 
-#### AWS CLI configuration
+### Start the AWS Academy Learner Lab
 
-You are set up as user `ds2022` in AWS. Your credentials are posted in Canvas (`DS2022 > Modules > Week 08`) in the `DS2022_AWS_RDS_Credentials.txt` file. Look them up now. You will need:
+Work in the **AWS Academy Learner Lab** (same Academy course as [IAM](../06-iam/README.md)), not a shared course account from Canvas.
 
-- AWS_ACCESS_KEY
-- AWS_SECRET_ACCESS_KEY
+1. In AWS Academy Canvas, open the **Learner Lab** (or equivalent module) and click **Start Lab**.
+2. Wait until the AWS indicator turns green, then open the AWS Management Console link.
 
-> **It is highly advised NOT to use root credentials for access in this way.**
+> **Leave the lab running.** Do **not** click **End Lab** when you finish today’s exercises. Ending the lab destroys IAM users/groups and S3 buckets. You will reuse this setup later (EC2, serverless). Refresh credentials when they expire; do not tear down the lab.
 
-In the terminal, follow these steps to configure the `aws` command line tools:
+### Create an IAM group and user (console)
+
+The lab starts with no student users or groups. Create them in the console (this reinforces [IAM](../06-iam/README.md)):
+
+1. Open **IAM** → **User groups** → **Create group**.
+2. Group name: `ds2022`.
+3. Attach these AWS managed policies to the group:
+   - **AmazonS3FullAccess**: S3 practice (buckets, objects)
+   - **IAMUserChangePassword**: so the user can sign in to the **AWS Management Console** and change their password
+   - **AmazonEC2FullAccess**: manage EC2 in later weeks
+   - **AWSLambda_FullAccess**: manage Lambda in later weeks
+4. Create the group.
+5. Open **IAM** → **Users** → **Create user**.
+6. User name: your computing id (same as `$USER` in the terminal, e.g. `mst3k`).
+7. Under **Provide user access to the AWS Management Console**, choose **I want to create an IAM user**, enable console access, and set a custom password (save it somewhere safe; you will need it to log in as this user).
+8. Add the user to group `ds2022`, then create the user.
+
+**Console login as your IAM user** (optional check after creation): use the account ID from **AWS Details** (or `aws sts get-caller-identity`), IAM user name = your computing id, and the password you set. Sign-in URL form: `https://ACCOUNT_ID.signin.aws.amazon.com/console`.
+
+**Learner Lab role for EC2 and Lambda (do not skip):** Academy pre-creates a role named **`LabRole`** and an instance profile named **`LabInstanceProfile`**. When you launch EC2 or create Lambda later, attach these; do not invent new roles (Learner Lab IAM is restricted).
+
+- **EC2:** assign instance profile **`LabInstanceProfile`** (so the instance uses **`LabRole`**). Needed for browser/SSM access and for apps on the instance to call other AWS services.
+- **Lambda:** set the function’s execution role to **`LabRole`** so the function can reach S3, CloudWatch, and other services.
+
+Confirm under **IAM** → **Roles** that **`LabRole`** exists (and **`LabInstanceProfile`** under instance profiles). You will reuse this in upcoming weeks.
+
+For the CLI exercises below, use **AWS Details** session credentials (Access Key + Secret + Session Token), not long-lived access keys on this IAM user. Creating the group and user (with console access) is still required practice and keeps a named identity in the account for later work.
+
+### AWS CLI configuration (temporary credentials)
+
+Learner Lab CLI access comes from **AWS Details** on the lab page:
+
+1. Click **AWS Details** → **Show** (or equivalent) to reveal credentials.
+2. Copy **AWS Access Key ID**, **AWS Secret Access Key**, and **Session Token**.
+
+> **Credentials expire after about 4 hours**, even while the lab stays running. When `aws` or `boto3` suddenly fail with expired-token errors, open **AWS Details** again, copy fresh values into `~/.aws/credentials` (or re-export env vars), and continue. Refreshing credentials does **not** recreate your IAM group, user, or buckets; **Ending Lab** does.
+
+Configure the CLI:
 
 ```bash
 aws configure
 ```
 
-You will be prompted to enter:
+Enter:
 
-- **AWS Access Key ID**: Enter the Access Key ID (from Canvas)
-- **AWS Secret Access Key**: Enter the Secret Access Key (from Canvas)
-- **Default region name**: Enter your preferred AWS region (use `us-east-1`, you generally want to choose the one that's geographically closest)
-- **Default output format**: Enter `json` (recommended) or `text` or `table`
+- **AWS Access Key ID**: from AWS Details
+- **AWS Secret Access Key**: from AWS Details
+- **Default region name**: `us-east-1`
+- **Default output format**: `json`
 
-The AWS account you enter in these steps must have at least read permission to access the resources you want to download. 
+Then add the session token. Edit `~/.aws/credentials` so the `[default]` profile includes all three values:
 
-Upon completion of `aws configure` you will see a hidden directory `~/.aws`. 
+```text
+[default]
+aws_access_key_id = YOUR_ACCESS_KEY
+aws_secret_access_key = YOUR_SECRET_KEY
+aws_session_token = YOUR_SESSION_TOKEN
+```
 
-> **Note:** Remember, the creation of personal config files in hidden directories inside your home directory is a best-practice pattern. 
+Alternatively, export in the shell (include the session token):
 
-**Check the config file**
+```bash
+export AWS_ACCESS_KEY_ID="YOUR_ACCESS_KEY"
+export AWS_SECRET_ACCESS_KEY="YOUR_SECRET_KEY"
+export AWS_SESSION_TOKEN="YOUR_SESSION_TOKEN"
+```
 
-You can verify your AWS configuration by viewing the config file:
+Upon completion you will have `~/.aws/config` and `~/.aws/credentials` (if you used `aws configure`).
+
+**Verify**
 
 ```bash
 cat ~/.aws/config
 cat ~/.aws/credentials
-```
-
-Or test your configuration by running:
-
-```bash
 aws sts get-caller-identity
 ```
 
-This command will display in JSON format the associated AWS account ID, user ARN, and user ID, confirming that your credentials are working correctly.
-
-It should look similar to this:
-
-```json
-{
-    "UserId": "xxxxxxxxxxxxx",
-    "Account": "nnnnnnnnnnnnnnn",
-    "Arn": "arn:aws:iam::nnnnnnnnnnnnn:user/ds2022"
-}
-```
+`get-caller-identity` should succeed and show your Learner Lab account. The ARN reflects the lab session identity (not a permanent Canvas `ds2022` user).
 
 
 
-#### Access S3 using the AWS CLI
+### Access S3 using the AWS CLI
 
 Now we can get busy!
 
@@ -108,28 +141,22 @@ Now we can get busy!
 aws s3 ls
 ```
 
-You should see a list similar to this
-
-```
-2026-03-17 14:01:15 ds2022-fall26
-2026-03-17 14:09:13 ds2022-khs3z
-...
-```
+You may see buckets you already created in this lab (for example `practice-mst3k`). The shared course materials live in `ds2022-fall26` in another account; that name may not appear in this list. Use the full `s3://ds2022-fall26/...` URIs below for download and sync.
 
 #### `aws s3 mb` - Make a new bucket
 
 ```
 echo $USER
-aws s3 mb s3://class-$USER
+aws s3 mb s3://practice-$USER
 ```
 
-The $USER variable will be expanded to your computing id. We use it here to allow everyone to create separate buckets without naming conflicts. You should see a response like:
+`$USER` expands to your computing id. Bucket names must be **globally unique** across all of AWS (a separate Learner Lab account does not give you a private name space). We use `practice-$USER` so the bucket is not confused with your IAM user name. You should see:
 
 ```
-make_bucket: class-mst3k
+make_bucket: practice-mst3k
 ```
 
-Remember that S3 bucket names must be globally unique from all other AWS customers. If you receive an error that the bucket already exists, retry with a new name, e.g. class-$USER-1, class-$USER-2, etc..
+If the bucket name is already taken, retry `practice-$USER-1`, `practice-$USER-2`, etc.
 
 Check the list of buckets again:
 ```
@@ -139,8 +166,7 @@ Your bucket should be in the list now.
 
 If the output is too long, pipe it into grep, like `aws s3 ls | grep $USER`.
 
-**Optional:** Log into the AWS Management Console. **The URL and credentials are in Canvas > Modules > Week 08**. Search for `S3` and click on `General Purpose Buckets`.
-
+**Optional:** In the Academy console (from Start Lab), open **S3** → **General Purpose buckets** and confirm `practice-$USER` appears.
 
 #### `aws s3 cp` - Copy files
 
@@ -150,39 +176,39 @@ The syntax is `aws s3 cp SOURCE DESTINATION`, similar to the regular `cp` comman
 - Copy from S3 to local environment
 - Copy from S3 bucket to another S3 bucket
 
-**Download**, try this:
+**Download**, try this (`ds2022-fall26` is a shared course bucket with public read on teaching objects; `--no-sign-request` avoids needing cross-account IAM):
 ```
-aws s3 cp s3://ds2022-fall26/cloud.jpg .
+aws s3 cp s3://ds2022-fall26/cloud.jpg . --no-sign-request
 ```
-This downloads `cloud.jpg` from the S3 bucket `ds2022-fall26` to your computer. Remember, `.` is the shorthand for your current directory.
+This downloads `cloud.jpg` from `ds2022-fall26` to your computer. Remember, `.` is the shorthand for your current directory.
 
 **Upload** (set content type so a later `presign` URL displays in the browser):
 ```
-aws s3 cp cloud.jpg s3://class-$USER/folder/in/bucket/cloud.jpg --content-type image/jpeg
+aws s3 cp cloud.jpg s3://practice-$USER/folder/in/bucket/cloud.jpg --content-type image/jpeg
 ```
-Copies `cloud.jpg` into your bucket under the key `folder/in/bucket/cloud.jpg` (same path the Python scripts use). Confirm with `aws s3 ls s3://class-$USER --recursive`.
+Copies `cloud.jpg` into your bucket under the key `folder/in/bucket/cloud.jpg` (same path the Python scripts use). Confirm with `aws s3 ls s3://practice-$USER --recursive`.
 
 Create another file on your computer, like `hello.txt`, add a message and save it. Then upload it into a new folder in S3.
 
 **Another upload:**
 ```
-aws s3 cp hello.txt s3://class-$USER/new_folder/hello.txt
+aws s3 cp hello.txt s3://practice-$USER/new_folder/hello.txt
 ```
 Notice that we don't have to create the `new_folder`.
 
-**Folders in S3:** Contrary to how it appears, S3 is not a file system in the ordinary sense. It is object storage: each object has a **key** (name) and a **value** (the file contents). Keys can include `/`, which looks like folders (for example `folder/subfolder/filename.txt`), but those “folders” are only a naming convention—a mental convenience—not real directories you create ahead of time. The bucket name is not part of the key.
+**Folders in S3:** Contrary to how it appears, S3 is not a file system in the ordinary sense. It is object storage: each object has a **key** (name) and a **value** (the file contents). Keys can include `/`, which looks like folders (for example `folder/subfolder/filename.txt`), but those “folders” are only a naming convention (a mental convenience), not real directories you create ahead of time. The bucket name is not part of the key.
 
 #### `aws s3 ls` - List the contents of a bucket
 
-In the example below, replace `class-mst3k` with your actual bucket name.
+In the example below, replace `practice-mst3k` with your actual bucket name.
 
 ```
-aws s3 ls s3://class-mst3k/
+aws s3 ls s3://practice-mst3k/
                            PRE folder/
                            PRE new_folder/
 ```
 
-`PRE folder/` and `PRE new_folder/` are the CLI’s way of showing key prefixes (the “folders”) after your uploads. Use `aws s3 ls s3://class-mst3k/ --recursive` to see full keys such as `folder/in/bucket/cloud.jpg`.
+`PRE folder/` and `PRE new_folder/` are the CLI’s way of showing key prefixes (the “folders”) after your uploads. Use `aws s3 ls s3://practice-mst3k/ --recursive` to see full keys such as `folder/in/bucket/cloud.jpg`.
 
 #### `aws s3 sync` - Synchronize a folder
 
@@ -192,26 +218,26 @@ aws s3 ls s3://class-mst3k/
 
 ```bash
 mkdir -p data
-aws s3 sync s3://ds2022-fall26/data/ ./data/
+aws s3 sync s3://ds2022-fall26/data/ ./data/ --no-sign-request
 ls data
 ```
 
 **2. Sync that folder up into your own bucket**
 
 ```bash
-aws s3 sync ./data/ s3://class-$USER/data/
-aws s3 ls s3://class-$USER/data/
+aws s3 sync ./data/ s3://practice-$USER/data/
+aws s3 ls s3://practice-$USER/data/
 ```
 
 You can sync in any direction as long as at least one side is S3 (local ↔ S3, or S3 ↔ S3).
 
 #### `aws s3 mv` - Move (rename) an object in your bucket
 
-`mv` renames or relocates an object. Practice on a file you just synced into your bucket (pick a real filename from `aws s3 ls s3://class-$USER/data/`):
+`mv` renames or relocates an object. Practice on a file you just synced into your bucket (pick a real filename from `aws s3 ls s3://practice-$USER/data/`):
 
 ```bash
-aws s3 mv s3://class-$USER/data/notes.txt s3://class-$USER/data/readme.txt
-aws s3 ls s3://class-$USER/data/
+aws s3 mv s3://practice-$USER/data/notes.txt s3://practice-$USER/data/readme.txt
+aws s3 ls s3://practice-$USER/data/
 ```
 
 If `notes.txt` is not in that listing, use another name from the list.
@@ -221,39 +247,36 @@ If `notes.txt` is not in that listing, use another name from the list.
 In some cases you want to share a file for a limited time without creating access keys. `presign` creates a signed URL that expires after a set number of seconds (`--expires-in`).
 
 ```bash
-aws s3 presign --expires-in 600 s3://class-$USER/folder/in/bucket/cloud.jpg
+aws s3 presign --expires-in 600 s3://practice-$USER/folder/in/bucket/cloud.jpg
 ```
 
 You will receive a URL like this (yours will differ):
 
 ```text
-https://class-mst3k.s3.amazonaws.com/folder/in/bucket/cloud.jpg?AWSAccessKeyId=AKIA...&Signature=...&Expires=...
+https://practice-mst3k.s3.amazonaws.com/folder/in/bucket/cloud.jpg?AWSAccessKeyId=AKIA...&Signature=...&Expires=...
 ```
 
-That URL works for 600 seconds (10 minutes). After it expires, the link no longer grants access; the object is still in your bucket.
+That URL works for 600 seconds (10 minutes). Open it in your web browser. After it expires, the link no longer grants access; the object is still in your bucket.
 
 If the browser downloads the file instead of showing the image, the object was stored without a JPEG content type. Re-upload with `--content-type image/jpeg`, or use `06-presign.py`, which sets `ResponseContentType` / `ResponseContentDisposition` so the image opens inline.
 
-#### `aws s3 rm` - Remove files
+#### `aws s3 rm` / `rb` - Optional cleanup
 
-**Delete a file**
-```
-aws s3 rm s3://class-$USER/new_folder/hello.txt
-```
+Keep the `practice-$USER` bucket for later weeks unless you intentionally want to delete it now. Deleting is an optional practice step.
 
-**Delete all files and folders in your bucket**
+**Delete one file**
 ```
-aws s3 rm --recursive s3://class-$USER
+aws s3 rm s3://practice-$USER/new_folder/hello.txt
 ```
 
-#### `aws s3 rb` - Delete bucket
-
-**Delete the bucket itself** 
+**Empty the bucket, then you can delete it** (only if you are sure):
 ```
-aws s3 rb s3://class-$USER
+aws s3 rm --recursive s3://practice-$USER
+aws s3 rb s3://practice-$USER
 ```
 
-**Remember:** S3 buckets must be emptied of all contents before they can be removed. Once removed, the bucket name is available for other users.
+**Remember:** S3 buckets must be emptied before they can be removed. Once removed, the bucket name is available for other AWS customers.
+
 
 ### Access S3 using `boto3` in Python
 
@@ -281,13 +304,14 @@ s3 = boto3.client('s3')
 
 #### Optional: credentials via environment variables
 
-If `~/.aws/credentials` is missing (or you prefer not to use it), you can set credentials in the shell as environment variables and read them in the script. That keeps secrets out of the source file—never hardcode keys in clear text (see [best practices](../../best-practices.md)).
+If `~/.aws/credentials` is missing (or you prefer not to use it), you can set credentials in the shell as environment variables and read them in the script. That keeps secrets out of the source file; never hardcode keys in clear text (see [best practices](../../best-practices.md)).
 
 In the shell:
 
 ```bash
 export AWS_ACCESS_KEY_ID="YOUR_KEY"
 export AWS_SECRET_ACCESS_KEY="YOUR_SECRET"
+export AWS_SESSION_TOKEN="YOUR_SESSION_TOKEN"
 ```
 
 In Python:
@@ -300,10 +324,11 @@ s3 = boto3.client(
     "s3",
     aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
     aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    aws_session_token=os.getenv("AWS_SESSION_TOKEN"),
 )
 ```
 
-For class, prefer the default: configure once with `aws configure`, then use plain `boto3.client('s3')`.
+For class, prefer putting the AWS Details values (including session token) in `~/.aws/credentials`, then use plain `boto3.client('s3')`. Refresh those values when the ~4 hour session expires.
 
 
 #### Create a bucket
@@ -311,7 +336,7 @@ For class, prefer the default: configure once with `aws configure`, then use pla
 ```python
 import boto3
 
-bucket_name = "class-mst3k"  # replace with your bucket name
+bucket_name = "practice-mst3k"  # replace with your bucket name
 s3 = boto3.client("s3", region_name="us-east-1")
 # For most regions you pass CreateBucketConfiguration={"LocationConstraint": "region-name"}.
 # us-east-1 is special: omit LocationConstraint or create_bucket will fail.
@@ -324,7 +349,7 @@ s3.create_bucket(Bucket=bucket_name)
 ```python
 import boto3
 
-bucket_name = "class-mst3k"  # replace with your bucket name
+bucket_name = "practice-mst3k"  # replace with your bucket name
 local_file = "cloud.jpg"
 key = "folder/in/bucket/cloud.jpg"  # same key as 04-upload-object.py / 06-presign.py
 
@@ -364,7 +389,7 @@ with open(local_file, "wb") as f:
 import boto3
 
 s3 = boto3.client("s3")
-bucket_name = "class-mst3k"  # replace with your bucket name
+bucket_name = "practice-mst3k"  # replace with your bucket name
 key = "folder/in/bucket/cloud.jpg"
 
 s3.delete_object(Bucket=bucket_name, Key=key)
@@ -378,12 +403,12 @@ To remove every object (empty the bucket), see `08-delete-all-objects.py`.
 ```python
 import boto3
 
-bucket_name = "class-mst3k"  # replace with your bucket name
+bucket_name = "practice-mst3k"  # replace with your bucket name
 s3 = boto3.client("s3")
 s3.delete_bucket(Bucket=bucket_name)
 ```
 
-> **Note:** Buckets have to be empty before they can be deleted (`08-delete-all-objects.py`, then `09-delete-bucket.py`).
+> **Note:** Optional cleanup only. Buckets must be empty before delete (`08-delete-all-objects.py`, then `09-delete-bucket.py`). Keep `practice-$USER` if you will reuse it later.
 
 #### Catching boto exceptions
 
@@ -396,17 +421,26 @@ See the numbered scripts in this folder for runnable examples, including `try` /
 | Script | Purpose |
 |--------|---------|
 | `00-env-credentials.py` | Build S3 client from env vars (optional; default is `~/.aws`) |
-| `01-make-bucket.py` | Create `class-$USER` |
+| `01-make-bucket.py` | Create `practice-$USER` |
 | `02-list-buckets.py` | List buckets |
-| `03-download-object.py` | Download `cloud.jpg` from `s3://ds2022-fall26/` |
+| `03-download-object.py` | Download `cloud.jpg` from `s3://ds2022-fall26/` (public read) |
 | `04-upload-object.py` | Upload to `folder/in/bucket/cloud.jpg` (`ContentType=image/jpeg`) |
 | `05-list-objects.py` | List objects in a bucket |
 | `06-presign.py` | Presign `folder/in/bucket/cloud.jpg` (inline display) |
 | `07-delete-object.py` | Delete `folder/in/bucket/cloud.jpg` |
-| `08-delete-all-objects.py` | Empty a bucket (recursive) |
-| `09-delete-bucket.py` | Delete the bucket (must be empty) |
+| `08-delete-all-objects.py` | Empty a bucket (recursive; optional cleanup) |
+| `09-delete-bucket.py` | Delete the bucket (optional; must be empty) |
 
-The scripts are short top-to-bottom demos—no helper functions or `if __name__ == "__main__"` guards—so each file is easy to read in one pass. For labs and production code, follow the course [best practices](../../best-practices.md).
+The scripts are short top-to-bottom demos with no helper functions or `if __name__ == "__main__"` guards, so each file is easy to read in one pass. Prefer keeping `practice-$USER` for later weeks; treat `08` / `09` as optional cleanup. For labs and production code, follow the course [best practices](../../best-practices.md).
+
+### Instructor note: shared bucket `ds2022-fall26`
+
+On the account that owns `ds2022-fall26`, teaching objects are **publicly readable** (not cross-account IAM):
+
+- Allow `s3:GetObject` for `Principal: "*"` on `arn:aws:s3:::ds2022-fall26/*` (or only `cloud.jpg` and `data/*`).
+- For `aws s3 sync .../data/`, also allow `s3:ListBucket` on the bucket with a prefix condition on `data/`.
+- Adjust Block Public Access only as needed for this teaching bucket.
+- Students must not have write access to `ds2022-fall26`.
 
 ## Advanced Concepts (Optional)
 
@@ -440,14 +474,14 @@ Examples:
 
 ### Access control lists (ACLs)
 
-An ACL is a per-object (or per-bucket) permission list—who can read or write that object. Newer accounts often have **Block Public Access** turned on, so public ACLs may be rejected until you change that setting (in class, prefer private objects + `presign` unless the lab asks for public access).
+An ACL is a per-object (or per-bucket) permission list: who can read or write that object. Newer accounts often have **Block Public Access** turned on, so public ACLs may be rejected until you change that setting (in class, prefer private objects + `presign` unless the lab asks for public access).
 
 Upload with a canned ACL (example: public read):
 
 ```python
 import boto3
 
-bucket_name = "class-mst3k"  # replace with your bucket name
+bucket_name = "practice-mst3k"  # replace with your bucket name
 s3 = boto3.client("s3")
 
 with open("cloud.jpg", "rb") as f:
@@ -478,5 +512,5 @@ Common canned ACLs: `private`, `public-read`. For broader rules (whole prefix, m
 - [AWS CLI - Getting started](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html)
 - [Boto3 Documentation](https://docs.aws.amazon.com/boto3/latest/)
 - [Boto3 and S3](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html)
-- [IAM (Tuesday)](../06-iam/README.md)
+- [IAM](../06-iam/README.md)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create an S3 bucket named class-<USER> in us-east-1."""
+"""Create an S3 bucket named practice-<USER> in us-east-1."""
 import logging
 import os
 
@@ -9,9 +9,9 @@ from botocore.exceptions import ClientError
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
 
-# we use buckets named class-<USER> to avoid conflicts with other students
-bucket_name = "class-" + os.environ.get("USER", "unknown")
-log.info("%s", bucket_name)
+# practice-<USER>: globally unique bucket name (not the same as the IAM user)
+bucket_name = f"practice-{os.environ.get('USER', 'unknown')}"
+log.info(f"{bucket_name}")
 
 try:
     s3 = boto3.client("s3", region_name="us-east-1")

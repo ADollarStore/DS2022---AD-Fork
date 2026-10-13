@@ -4,7 +4,7 @@ This week you learn how access control works in AWS. **IAM** defines users, role
 
 **You will complete the AWS Academy IAM lab** and (optionally) dig into policies, STS temporary credentials, and named profiles.
 
-These skills are the foundation for [S3](../06-iam-s3/README.md), `Lab 6`, and the upcoming weeks on **EC2 virtual machines** and **serverless compute**.
+These skills are the foundation for [S3](../06-s3/README.md), `Lab 6`, and the upcoming weeks on **EC2 virtual machines** and **serverless compute**.
 
 
 ## In-class exercises
@@ -74,7 +74,7 @@ Example (conceptual flow):
 - Call `sts:AssumeRole` to get temporary credentials.
 - Use those temporary credentials in the AWS CLI or `boto3` instead of long-lived access keys.
 
-**AWS CLI — one-off** `assume-role`
+**AWS CLI (one-off)** `assume-role`
 
 ```bash
 aws sts assume-role \
@@ -84,7 +84,7 @@ aws sts assume-role \
 
 The JSON output includes `AccessKeyId`, `SecretAccessKey`, and `SessionToken`. Export those as environment variables (or paste into a new shell) to run further `aws` commands as that role.
 
-**AWS CLI — profile that assumes a role** (recommended)
+**AWS CLI (profile that assumes a role)** (recommended)
 
 Add to `~/.aws/config` (use your real account ID and role name; `source_profile` is the profile whose user may call `sts:AssumeRole`):
 
@@ -103,7 +103,7 @@ aws s3 ls --profile my-assumed-role
 
 The CLI calls STS for you when you use that profile.
 
-**boto3 — explicit** `assume_role`
+**boto3 (explicit)** `assume_role`
 
 ```python
 import boto3
@@ -124,7 +124,7 @@ s3 = boto3.client(
 print(s3.list_buckets())
 ```
 
-**boto3 — same as the CLI profile**
+**boto3 (same as the CLI profile)**
 
 If you defined `my-assumed-role` in `~/.aws/config` as above:
 
