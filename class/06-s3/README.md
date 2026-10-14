@@ -1,15 +1,18 @@
 # AWS S3 Storage
 
-This session focuses on **S3**, object storage for datasets, backups, and pipeline I/O. You already covered [IAM](../06-iam/README.md); now you look at IAM roles in the AWS Academy **Learner Lab**, then use temporary lab credentials with the CLI and `boto3` to create buckets and move objects.
+This session focuses on **S3**, object storage for datasets, backups, and pipeline I/O. Building on [IAM](../06-iam/README.md), you will:
 
-**You will:** start a Learner Lab, inspect the pre-created IAM roles, configure the AWS CLI from **AWS Details**, practice `cp` / `sync` / `presign`, and run the numbered Python scripts in this folder. That workflow is what `Lab 6` builds on, and the same pattern of identity + storage you will reuse with **Amazon EC2** and **Amazon Lambda** in the coming weeks.
+- start an AWS Academy **Learner Lab** and inspect its pre-created IAM roles
+- configure the AWS CLI with temporary credentials**
+- create a bucket and move objects with `cp` / `sync` / `mv` / `presign`
+- do the same from Python with `boto3` and the numbered scripts in this folder
+
+`Lab 6` builds on this workflow, and you will reuse the same pattern of identity + storage with **Amazon EC2** and **AWS Lambda** in the coming weeks.
 
 > Experiment with the commands and options. Errors are normal; ask for help and help each other when you can. Advanced topics (versioning, events, ACLs) are optional.
 
 
-
 ## In-class exercises
-
 
 
 ### Environment
@@ -678,8 +681,8 @@ Common canned ACLs: `private`, `public-read`. For broader rules (whole prefix, m
 
 ## Resources
 
-- [Amazon S3 - Getting started](https://docs.aws.amazon.com/AmazonS3/latest/userguide/GetStartedWithS3.html)
 - [AWS CLI - Getting started](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html)
+- [Amazon S3 - Getting started](https://docs.aws.amazon.com/AmazonS3/latest/userguide/GetStartedWithS3.html)
 - [Boto3 Documentation](https://docs.aws.amazon.com/boto3/latest/)
 - [Boto3 and S3](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html)
 - [IAM](../06-iam/README.md)
